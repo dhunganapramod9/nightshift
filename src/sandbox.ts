@@ -1,4 +1,5 @@
 import { join } from "node:path";
+import { join as posixJoin } from "node:path/posix";
 
 export interface SandboxOptions {
   workspacePath: string;      // Writable directory
@@ -25,7 +26,7 @@ export function buildSandboxCommand(
 }
 
 function buildBwrapCommand(command: string[], opts: SandboxOptions): string[] {
-  const bwrap = join(opts.binDir, "bwrap");
+  const bwrap = posixJoin(opts.binDir.replace(/\\/g, "/"), "bwrap");
 
   return [
     bwrap,

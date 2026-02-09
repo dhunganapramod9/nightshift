@@ -288,18 +288,22 @@ function buildAttachTuiArgs(url: string, session: string | undefined, directory:
   };
 }
 
+function posixPath(p: string): string {
+  return p.replace(/\\/g, "/");
+}
+
 function buildXdgEnv(prefix: string): Record<string, string> {
   return {
-    XDG_CONFIG_HOME: join(prefix, "config"),
-    XDG_DATA_HOME: join(prefix, "share"),
-    XDG_CACHE_HOME: join(prefix, "cache"),
-    XDG_STATE_HOME: join(prefix, "state"),
+    XDG_CONFIG_HOME: posixPath(join(prefix, "config")),
+    XDG_DATA_HOME: posixPath(join(prefix, "share")),
+    XDG_CACHE_HOME: posixPath(join(prefix, "cache")),
+    XDG_STATE_HOME: posixPath(join(prefix, "state")),
   };
 }
 
 function buildUvEnv(prefix: string): Record<string, string> {
   return {
-    UV_PYTHON_INSTALL_DIR: join(prefix, "python"),
+    UV_PYTHON_INSTALL_DIR: posixPath(join(prefix, "python")),
     UV_PYTHON_PREFERENCE: "only-managed",
   };
 }
