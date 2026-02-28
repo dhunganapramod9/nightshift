@@ -4,6 +4,7 @@ import { checkSandboxAvailability } from "../../lib/platform";
 import { readFullConfig, expandHome } from "../../lib/config";
 import { buildXdgEnv, buildUvEnv } from "../../lib/env";
 import { buildSandboxCommand, type SandboxOptions } from "../../lib/sandbox";
+import { defaultDriverManager } from "../../lib/runtime";
 import { startAgentServer } from "../agents/server";
 import { runAgentLoop } from "../agents/loop";
 import { createBus, taggedPublisher } from "../agents/bus";
@@ -125,6 +126,9 @@ async function isRalphServerHealthy(url: string): Promise<boolean> {
 }
 
 export async function run(prefix: string, args: string[], useNightshiftTui: boolean, sandboxEnabled: boolean, ralphOptions?: RalphOptions): Promise<void> {
+  if (process.platform === "win32") {
+    throw new Error("Run is supported on macOS and Linux only. Use WSL (Windows Subsystem for Linux) to run Nightshift on Windows.");
+  }
   prefix = resolve(prefix);
   const binDir = join(prefix, "bin");
   const uvToolsBin = join(prefix, "uv-tools", "bin");
@@ -185,30 +189,28 @@ export async function run(prefix: string, args: string[], useNightshiftTui: bool
     // Start opencode as a server and attach nightshift TUI
     await runWithNightshiftTui(opencode, PATH, workspacePath, args, xdgEnv, sandboxEnabled, sandboxOpts);
   } else {
-    // Standard opencode execution
+    // Standard opencode execution via runtime driver
     console.log(`Launching opencode with isolated PATH`);
     console.log(`  PATH prefix: ${pathParts.join(":")}`);
 
-    const baseCommand = [opencode, ...args];
-    const finalCommand = sandboxEnabled
-      ? buildSandboxCommand(baseCommand, sandboxOpts)
-      : baseCommand;
+    const preferDriver = sandboxEnabled ? "sandbox" : "noop";
+    const driver = await defaultDriverManager.selectDriver(preferDriver);
+    const runEnv = sandboxEnabled
+      ? sandboxOpts.env
+      : { ...process.env, ...xdgEnv, ...uvEnv, PATH, OPENCODE_EXPERIMENTAL_LSP_TY: "true" };
+    const ctx = {
+      opencode,
+      args,
+      env: runEnv,
+      workspacePath,
+      sandboxOpts,
+      sandboxEnabled,
+    };
 
-    const proc = Bun.spawn(finalCommand, {
-      cwd: workspacePath,
-      stdout: "inherit",
-      stderr: "inherit",
-      stdin: "inherit",
-      env: sandboxEnabled ? sandboxOpts.env : {
-        ...process.env,
-        ...xdgEnv,
-        ...uvEnv,
-        PATH,
-        OPENCODE_EXPERIMENTAL_LSP_TY: "true",
-      },
+    const exitCode = await defaultDriverManager.run(driver, ctx, async (handle) => {
+      const proc = (handle as { proc: { exited: Promise<number> } }).proc;
+      return await proc.exited;
     });
-
-    const exitCode = await proc.exited;
     process.exit(exitCode);
   }
 }
